@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Question {
   id: number;
@@ -58,11 +60,13 @@ const questions: Question[] = [
 ];
 
 const QuizPage = () => {
+  const { session } = useAuth();
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const q = questions[currentQ];
 
@@ -73,14 +77,46 @@ const QuizPage = () => {
     if (index === q.correct) setScore((s) => s + 1);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentQ < questions.length - 1) {
       setCurrentQ((c) => c + 1);
       setSelected(null);
       setAnswered(false);
     } else {
       setFinished(true);
+      await saveStats();
     }
+  };
+
+  const saveStats = async () => {
+    if (!session?.user) return;
+    setSaving(true);
+    await supabase.from("user_stats").insert({
+      user_id: session.user.id,
+      type: "quiz",
+      score: score,
+      total: questions.length,
+      categoria: q.category,
+    });
+    setSaving(false);
+    const saveStats = async () => {
+  if (!session?.user) {
+    console.log("sem sessão");
+    return;
+  }
+  setSaving(true);
+
+  const { error, data } = await supabase.from("user_stats").insert({
+    user_id: session.user.id,
+    type: "quiz",
+    score: score,
+    total: questions.length,
+    categoria: q.category,
+  }).select();
+
+  console.log("insert resultado:", data, error);
+  setSaving(false);
+};
   };
 
   const handleRestart = () => {
@@ -104,6 +140,7 @@ const QuizPage = () => {
             Você acertou <span className="text-primary font-bold">{score}</span> de{" "}
             <span className="font-bold">{questions.length}</span> questões
           </p>
+          {saving && <p className="text-xs text-muted-foreground">Salvando resultado...</p>}
           <button
             onClick={handleRestart}
             className="gradient-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold flex items-center gap-2 mx-auto active:scale-95 transition-transform"

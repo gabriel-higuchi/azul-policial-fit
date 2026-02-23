@@ -51,3 +51,21 @@ $$ LANGUAGE plpgsql SET search_path = public;
 CREATE TRIGGER update_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+create table user_stats (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  type text, -- 'quiz' ou 'taf'
+  score integer, -- acertos no quiz ou metros no TAF
+  total integer, -- total de questões
+  created_at timestamp default now()
+);
+
+alter table user_stats enable row level security;
+
+create policy "Users can manage their own stats"
+on user_stats for all
+using (auth.uid() = user_id);
+
+alter table user_stats add column if not exists duracao integer;
+alter table user_stats add column if not exists categoria text;

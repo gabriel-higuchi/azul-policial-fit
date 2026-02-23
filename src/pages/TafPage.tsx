@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { Play, Square, RotateCcw, MapPin, Flame, Clock } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const TafPage = () => {
+  const { session } = useAuth();
   const [isRunning, setIsRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [intervalId, setIntervalId] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const startTimer = () => {
+    setSaved(false);
     setIsRunning(true);
     const id = setInterval(() => {
       setSeconds((s) => s + 1);
@@ -14,15 +20,40 @@ const TafPage = () => {
     setIntervalId(id);
   };
 
-  const stopTimer = () => {
+  const stopTimer = async () => {
     setIsRunning(false);
     if (intervalId) clearInterval(intervalId);
     setIntervalId(null);
+    await saveStats();
   };
 
   const resetTimer = () => {
-    stopTimer();
+    setIsRunning(false);
+    if (intervalId) clearInterval(intervalId);
+    setIntervalId(null);
     setSeconds(0);
+    setSaved(false);
+  };
+
+  const saveStats = async () => {
+    if (!session?.user || seconds < 5 || saved) return;
+    setSaved(true);
+
+    const metros = Math.round(seconds * 3.33);
+    const duracao = Math.round(seconds / 60);
+
+    const { error } = await supabase.from("user_stats").insert({
+      user_id: session.user.id,
+      type: "taf",
+      score: metros,
+      total: 0,
+      duracao: duracao,
+      categoria: "Corrida",
+    });
+
+    if (!error) {
+      toast({ title: "Treino salvo! 💪", description: `${metros}m em ${formatTime(seconds)}` });
+    }
   };
 
   const formatTime = (s: number) => {
@@ -31,8 +62,7 @@ const TafPage = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Simulated distance based on time (avg pace)
-  const distance = (seconds * 3.33 / 60).toFixed(2); // ~3.33 m/s pace
+  const distance = (seconds * 3.33 / 60).toFixed(2);
   const calories = Math.round(seconds * 0.15);
 
   return (
@@ -48,7 +78,7 @@ const TafPage = () => {
           {formatTime(seconds)}
         </p>
         <p className="text-sm text-muted-foreground">
-          {isRunning ? "Em andamento..." : seconds > 0 ? "Pausado" : "Pronto para iniciar"}
+          {isRunning ? "Em andamento..." : seconds > 0 ? saved ? "Treino salvo ✓" : "Pausado" : "Pronto para iniciar"}
         </p>
       </div>
 

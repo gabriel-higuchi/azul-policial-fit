@@ -1,28 +1,41 @@
-import { useState } from "react";
 import { Trophy, MessageCircle, Send, Crown, Medal, Award } from "lucide-react";
+import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
+import { useAuth } from "@/contexts/AuthContext";
 
-const rankingData = [
-  { name: "Carlos Silva", score: 980, avatar: "CS" },
-  { name: "Ana Oliveira", score: 945, avatar: "AO" },
-  { name: "Bruno Santos", score: 920, avatar: "BS" },
-  { name: "Julia Lima", score: 895, avatar: "JL" },
-  { name: "Pedro Costa", score: 870, avatar: "PC" },
-  { name: "Maria Souza", score: 845, avatar: "MS" },
-  { name: "Lucas Ferreira", score: 820, avatar: "LF" },
-  { name: "Camila Rocha", score: 795, avatar: "CR" },
-];
+// dentro do componente, remova o estado username/hasJoined e adicione:
+const socket = io("http://10.253.1.206:3001");
 
-const chatMessages = [
-  { user: "Carlos S.", msg: "Alguém estudando Direito Penal hoje?", time: "14:32" },
-  { user: "Ana O.", msg: "Sim! Acabei o quiz com 9/10 🎉", time: "14:35" },
-  { user: "Bruno S.", msg: "Qual material vocês estão usando pra legislação?", time: "14:40" },
-  { user: "Julia L.", msg: "Recomendo as aulas do estratégia!", time: "14:42" },
-  { user: "Pedro C.", msg: "Bora treinar TAF amanhã no parque?", time: "14:50" },
-];
+type Message = { user: string; msg: string; time: string };
+type RankingUser = { name: string; score: number; avatar: string };
 
 const CommunityPage = () => {
+  const { session } = useAuth(); // dentro do componente
+  const username = session?.user?.user_metadata?.display_name || session?.user?.email || "Anônimo";
   const [tab, setTab] = useState<"ranking" | "chat">("ranking");
+  const [rankingData, setRankingData] = useState<RankingUser[]>([]);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetch("http://10.253.1.206:3001/api/ranking")
+      .then(r => r.json())
+      .then(setRankingData);
+
+    socket.on("history", setChatMessages);
+
+    socket.on("message", (msg: Message) => {
+      setChatMessages(prev => [...prev, msg]);
+    });
+
+    return () => { socket.off("history"); socket.off("message"); };
+  }, []);
+
+  const sendMessage = () => {
+    if (!message.trim()) return;
+    socket.emit("message", { user: username, msg: message });
+    setMessage("");
+  };
 
   const getRankIcon = (i: number) => {
     if (i === 0) return <Crown size={18} className="text-accent" />;
@@ -101,10 +114,14 @@ const CommunityPage = () => {
             <input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               placeholder="Digite sua mensagem..."
               className="flex-1 bg-secondary rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary"
             />
-            <button className="w-11 h-11 rounded-xl gradient-primary flex items-center justify-center shrink-0 active:scale-90 transition-transform">
+            <button
+              onClick={sendMessage}
+              className="w-11 h-11 rounded-xl gradient-primary flex items-center justify-center shrink-0 active:scale-90 transition-transform"
+            >
               <Send size={18} className="text-primary-foreground" />
             </button>
           </div>
