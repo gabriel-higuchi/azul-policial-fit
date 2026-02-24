@@ -1,40 +1,39 @@
-import { Shield, BookOpen, Timer, Trophy } from "lucide-react";
+import { Shield, BookOpen, Timer, Trophy, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 const quickActions = [
-  {
-    icon: BookOpen,
-    label: "Quiz Rápido",
-    desc: "10 questões",
-    path: "/quiz",
-    gradient: true,
-  },
-  {
-    icon: Timer,
-    label: "Treino TAF",
-    desc: "Corrida",
-    path: "/taf",
-    gradient: false,
-  },
-  {
-    icon: Trophy,
-    label: "Ranking",
-    desc: "Top 10",
-    path: "/comunidade",
-    gradient: false,
-  },
+  { icon: BookOpen, label: "Quiz Rápido", desc: "10 questões", path: "/quiz",      gradient: true  },
+  { icon: Timer,    label: "Treino TAF",  desc: "Corrida",     path: "/taf",       gradient: false },
+  { icon: Trophy,   label: "Ranking",     desc: "Top 10",      path: "/comunidade",gradient: false },
 ];
 
 type Atividade = { title: string; score: string; time: string };
 
+interface Goals {
+  targetScore: number;
+  focusArea: string;
+  studyDays: number[];
+}
+
+function loadGoals(): Goals {
+  try {
+    const raw = localStorage.getItem("user_goals");
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { targetScore: 5000, focusArea: "PRF", studyDays: [1, 2, 3, 4, 5] };
+}
+
 const HomePage = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
-  const [stats, setStats] = useState({ questoes: 0, acertos: 0, streak: 0 });
+
+  const [stats, setStats]         = useState({ questoes: 0, acertos: 0, streak: 0 });
   const [atividades, setAtividades] = useState<Atividade[]>([]);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const goals = loadGoals();
 
   useEffect(() => {
     if (!session?.user) return;
@@ -48,15 +47,21 @@ const HomePage = () => {
 
       if (!data) return;
 
-      const quizData = data.filter(r => r.type === "quiz");
+      const quizData = data.filter((r) => r.type === "quiz");
 
-      // stats
       const questoes = quizData.reduce((acc, r) => acc + (r.total || 0), 0);
-      const acertos = quizData.reduce((acc, r) => acc + (r.score || 0), 0);
-      const pct = questoes > 0 ? Math.round((acertos / questoes) * 100) : 0;
+      const acertos  = quizData.reduce((acc, r) => acc + (r.score || 0), 0);
+      const pct      = questoes > 0 ? Math.round((acertos / questoes) * 100) : 0;
 
-      // streak
-      const dias = new Set(quizData.map(r => new Date(r.created_at).toDateString()));
+      // Pontos totais acumulados (mesma fórmula do servidor: score/total * 1000 por quiz)
+      const pts = quizData.reduce(
+        (acc, r) => acc + Math.round(((r.score || 0) / (r.total || 1)) * 1000),
+        0
+      );
+      setTotalPoints(pts);
+
+      // Streak
+      const dias = new Set(quizData.map((r) => new Date(r.created_at).toDateString()));
       let streak = 0;
       const hoje = new Date();
       while (dias.has(new Date(new Date().setDate(hoje.getDate() - streak)).toDateString())) {
@@ -65,27 +70,17 @@ const HomePage = () => {
 
       setStats({ questoes, acertos: pct, streak });
 
-      // atividade recente
-      const recente = data.slice(0, 5).map(r => {
-        const date = new Date(r.created_at);
-        const now = new Date();
+      // Atividade recente
+      const recente = data.slice(0, 5).map((r) => {
+        const date     = new Date(r.created_at);
+        const now      = new Date();
         const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        const time = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias`;
+        const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias`;
 
         if (r.type === "quiz") {
-          return {
-            title: `Quiz - ${r.categoria || "Geral"}`,
-            score: `${r.score}/${r.total}`,
-            time,
-          };
-        } else {
-          const km = (r.score / 1000).toFixed(2);
-          return {
-            title: `Corrida ${r.duracao || "?"} min`,
-            score: `${km} km`,
-            time,
-          };
+          return { title: `Quiz — ${r.categoria || "Geral"}`, score: `${r.score}/${r.total}`, time };
         }
+        return { title: `Corrida ${r.duracao || "?"} min`, score: `${(r.score / 1000).toFixed(2)} km`, time };
       });
 
       setAtividades(recente);
@@ -93,6 +88,9 @@ const HomePage = () => {
 
     fetchStats();
   }, [session]);
+
+  // Progresso em relação à meta (0–100%)
+  const progressPct = Math.min(Math.round((totalPoints / goals.targetScore) * 100), 100);
 
   return (
     <div className="animate-slide-up space-y-6">
@@ -109,9 +107,43 @@ const HomePage = () => {
         </div>
       </div>
 
+      {/* Meta de pontuação */}
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Star size={16} className="text-primary" />
+            <span className="text-sm font-semibold">Meta — {goals.focusArea}</span>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {totalPoints.toLocaleString("pt-BR")} / {goals.targetScore.toLocaleString("pt-BR")} pts
+          </span>
+        </div>
+
+        {/* Barra de progresso */}
+        <div className="h-3 bg-secondary rounded-full overflow-hidden">
+          <div
+            className="h-full gradient-primary rounded-full transition-all duration-700"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {progressPct >= 100
+              ? "🎉 Meta atingida!"
+              : `${progressPct}% concluído`}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Faltam {Math.max(0, goals.targetScore - totalPoints).toLocaleString("pt-BR")} pts
+          </span>
+        </div>
+      </div>
+
       {/* Stats Card */}
       <div className="glass-card p-5 space-y-4">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Seu progresso</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+          Seu progresso
+        </h2>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
             <p className="text-2xl font-bold text-gradient-primary">{stats.questoes}</p>
@@ -130,7 +162,9 @@ const HomePage = () => {
 
       {/* Quick Actions */}
       <div className="space-y-3">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Ações rápidas</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+          Ações rápidas
+        </h2>
         <div className="grid grid-cols-3 gap-3">
           {quickActions.map((action) => {
             const Icon = action.icon;
@@ -155,7 +189,9 @@ const HomePage = () => {
 
       {/* Recent Activity */}
       <div className="space-y-3">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Atividade recente</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+          Atividade recente
+        </h2>
         <div className="space-y-2">
           {atividades.length === 0 ? (
             <div className="glass-card p-4 text-center text-sm text-muted-foreground">

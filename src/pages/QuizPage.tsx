@@ -1,75 +1,66 @@
 import { useState } from "react";
-import { CheckCircle, XCircle, ArrowRight, RotateCcw } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, RotateCcw, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { socket } from "@/lib/socket";
 
 interface Question {
-  id: number;
+  id: string;
   question: string;
   options: string[];
   correct: number;
   category: string;
+  area: string;
 }
 
-const questions: Question[] = [
-  {
-    id: 1,
-    question: "Qual é o prazo máximo de duração do inquérito policial quando o indiciado está preso?",
-    options: ["10 dias", "15 dias", "30 dias", "60 dias"],
-    correct: 0,
-    category: "Direito Processual Penal",
-  },
-  {
-    id: 2,
-    question: "A legítima defesa é uma causa excludente de:",
-    options: ["Tipicidade", "Ilicitude", "Culpabilidade", "Punibilidade"],
-    correct: 1,
-    category: "Direito Penal",
-  },
-  {
-    id: 3,
-    question: "Segundo a CF/88, a segurança pública é dever do Estado e:",
-    options: [
-      "Responsabilidade exclusiva da polícia",
-      "Direito e responsabilidade de todos",
-      "Obrigação dos municípios",
-      "Competência federal",
-    ],
-    correct: 1,
-    category: "Direito Constitucional",
-  },
-  {
-    id: 4,
-    question: "O flagrante delito pode ser classificado como próprio quando:",
-    options: [
-      "O agente é encontrado com instrumentos do crime",
-      "O agente está cometendo ou acaba de cometer o crime",
-      "O agente é perseguido logo após o crime",
-      "O agente confessa a prática do crime",
-    ],
-    correct: 1,
-    category: "Direito Processual Penal",
-  },
-  {
-    id: 5,
-    question: "A Polícia Federal é organizada e mantida pela:",
-    options: ["União", "Estados", "Municípios", "Distrito Federal"],
-    correct: 0,
-    category: "Direito Constitucional",
-  },
+const AREAS = [
+  { id: "PRF", label: "PRF", desc: "Polícia Rodoviária Federal", color: "text-blue-400" },
+  { id: "PF",  label: "PF",  desc: "Polícia Federal",            color: "text-yellow-400" },
+  { id: "PC",  label: "PC",  desc: "Polícia Civil",              color: "text-green-400" },
+  { id: "PL",  label: "PL",  desc: "Polícia Legislativa",        color: "text-purple-400" },
+  { id: "PM",  label: "PM",  desc: "Polícia Militar",            color: "text-red-400" },
+  { id: "PP",  label: "PP",  desc: "Polícia Penal",              color: "text-orange-400" },
 ];
 
 const QuizPage = () => {
   const { session } = useAuth();
+
+  const [area, setArea]         = useState<string | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading]   = useState(false);
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
+  const [score, setScore]       = useState(0);
   const [answered, setAnswered] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]     = useState(false);
 
   const q = questions[currentQ];
 
+  // ── Carrega 10 perguntas da área escolhida ──────────────────────────────────
+  const startQuiz = async (selectedArea: string) => {
+    setLoading(true);
+    setArea(selectedArea);
+
+    const { data, error } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("area", selectedArea)
+      .limit(10);
+
+    if (error) {
+      console.error("Erro ao buscar questões:", error);
+      setLoading(false);
+      return;
+    }
+
+    // Embaralha para não vir sempre na mesma ordem
+    const shuffled = [...(data || [])].sort(() => Math.random() - 0.5);
+    setQuestions(shuffled);
+    setLoading(false);
+  };
+
+  // ── Responde uma questão ────────────────────────────────────────────────────
   const handleSelect = (index: number) => {
     if (answered) return;
     setSelected(index);
@@ -77,6 +68,7 @@ const QuizPage = () => {
     if (index === q.correct) setScore((s) => s + 1);
   };
 
+  // ── Avança ou finaliza ──────────────────────────────────────────────────────
   const handleNext = async () => {
     if (currentQ < questions.length - 1) {
       setCurrentQ((c) => c + 1);
@@ -88,38 +80,38 @@ const QuizPage = () => {
     }
   };
 
+  // ── Salva resultado ─────────────────────────────────────────────────────────
   const saveStats = async () => {
     if (!session?.user) return;
     setSaving(true);
+
     await supabase.from("user_stats").insert({
-      user_id: session.user.id,
-      type: "quiz",
-      score: score,
-      total: questions.length,
-      categoria: q.category,
+      user_id:  session.user.id,
+      type:     "quiz",
+      score:    score,
+      total:    questions.length,
+      categoria: area,
     });
+
+    const name =
+      session.user.user_metadata?.display_name ||
+      session.user.email ||
+      "Anônimo";
+
+    socket.emit("submitScore", {
+      userId: session.user.id,
+      name,
+      score,
+      total: questions.length,
+    });
+
     setSaving(false);
-    const saveStats = async () => {
-  if (!session?.user) {
-    console.log("sem sessão");
-    return;
-  }
-  setSaving(true);
-
-  const { error, data } = await supabase.from("user_stats").insert({
-    user_id: session.user.id,
-    type: "quiz",
-    score: score,
-    total: questions.length,
-    categoria: q.category,
-  }).select();
-
-  console.log("insert resultado:", data, error);
-  setSaving(false);
-};
   };
 
+  // ── Reinicia tudo ───────────────────────────────────────────────────────────
   const handleRestart = () => {
+    setArea(null);
+    setQuestions([]);
     setCurrentQ(0);
     setSelected(null);
     setScore(0);
@@ -127,8 +119,48 @@ const QuizPage = () => {
     setFinished(false);
   };
 
+  // ── Tela: seleção de área ───────────────────────────────────────────────────
+  if (!area || loading) {
+    return (
+      <div className="animate-slide-up space-y-6 pt-2">
+        <div>
+          <h1 className="text-xl font-bold">Quiz</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Selecione a área que você está estudando
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="glass-card p-8 text-center text-muted-foreground text-sm">
+            Carregando questões...
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {AREAS.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => startQuiz(a.id)}
+                className="glass-card p-5 flex flex-col items-center gap-2 active:scale-95 transition-all hover:border-primary/40"
+              >
+                <Shield size={28} className={a.color} />
+                <span className="text-lg font-black">{a.label}</span>
+                <span className="text-xs text-muted-foreground text-center leading-tight">
+                  {a.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Tela: resultado ─────────────────────────────────────────────────────────
   if (finished) {
-    const pct = Math.round((score / questions.length) * 100);
+    const pct    = Math.round((score / questions.length) * 100);
+    const points = Math.round((score / questions.length) * 1000);
+    const areaInfo = AREAS.find((a) => a.id === area);
+
     return (
       <div className="animate-slide-up space-y-6 pt-4">
         <div className="glass-card p-8 text-center space-y-4">
@@ -136,29 +168,41 @@ const QuizPage = () => {
             <span className="text-2xl font-black text-primary-foreground">{pct}%</span>
           </div>
           <h2 className="text-xl font-bold">Quiz Finalizado!</h2>
+          <p className="text-sm text-muted-foreground">
+            Área: <span className={`font-bold ${areaInfo?.color}`}>{areaInfo?.desc}</span>
+          </p>
           <p className="text-muted-foreground">
-            Você acertou <span className="text-primary font-bold">{score}</span> de{" "}
+            Você acertou{" "}
+            <span className="text-primary font-bold">{score}</span> de{" "}
             <span className="font-bold">{questions.length}</span> questões
           </p>
-          {saving && <p className="text-xs text-muted-foreground">Salvando resultado...</p>}
+          <p className="text-sm font-semibold text-primary">
+            +{points} pts adicionados ao ranking 🏆
+          </p>
+          {saving && (
+            <p className="text-xs text-muted-foreground">Salvando resultado...</p>
+          )}
           <button
             onClick={handleRestart}
             className="gradient-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold flex items-center gap-2 mx-auto active:scale-95 transition-transform"
           >
             <RotateCcw size={18} />
-            Tentar novamente
+            Escolher outra área
           </button>
         </div>
       </div>
     );
   }
 
+  // ── Tela: questão ───────────────────────────────────────────────────────────
+  const areaInfo = AREAS.find((a) => a.id === area);
+
   return (
     <div className="animate-slide-up space-y-5 pt-2">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Quiz</h1>
+          <h1 className="text-xl font-bold">Quiz — {area}</h1>
           <p className="text-xs text-muted-foreground">{q.category}</p>
         </div>
         <span className="text-sm font-semibold text-primary">
@@ -184,9 +228,9 @@ const QuizPage = () => {
         {q.options.map((opt, i) => {
           let style = "glass-card";
           if (answered) {
-            if (i === q.correct) style = "border-green-500 bg-green-500/10 border";
-            else if (i === selected) style = "border-destructive bg-destructive/10 border";
-            else style = "glass-card opacity-50";
+            if (i === q.correct)                  style = "border-green-500 bg-green-500/10 border";
+            else if (i === selected)              style = "border-destructive bg-destructive/10 border";
+            else                                  style = "glass-card opacity-50";
           }
           return (
             <button
@@ -198,8 +242,12 @@ const QuizPage = () => {
                 {String.fromCharCode(65 + i)}
               </span>
               <span className="flex-1">{opt}</span>
-              {answered && i === q.correct && <CheckCircle size={18} className="text-green-500 shrink-0" />}
-              {answered && i === selected && i !== q.correct && <XCircle size={18} className="text-destructive shrink-0" />}
+              {answered && i === q.correct && (
+                <CheckCircle size={18} className="text-green-500 shrink-0" />
+              )}
+              {answered && i === selected && i !== q.correct && (
+                <XCircle size={18} className="text-destructive shrink-0" />
+              )}
             </button>
           );
         })}
