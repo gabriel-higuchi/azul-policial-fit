@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Shield, Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,11 +7,12 @@ import { toast } from "@/hooks/use-toast";
 
 const AuthPage = () => {
   const { session, loading: authLoading } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [isLogin, setIsLogin]         = useState(true);
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (authLoading) {
     return (
@@ -21,14 +22,11 @@ const AuthPage = () => {
     );
   }
 
-  if (session) {
-    return <Navigate to="/" replace />;
-  }
+  if (session) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -50,11 +48,7 @@ const AuthPage = () => {
         });
       }
     } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -63,6 +57,7 @@ const AuthPage = () => {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8 animate-slide-up">
+
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
           <div className="w-20 h-20 rounded-2xl gradient-primary glow-primary flex items-center justify-center">
@@ -106,7 +101,7 @@ const AuthPage = () => {
           <div className="glass-card p-3 flex items-center gap-3">
             <Lock size={18} className="text-muted-foreground shrink-0" />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Senha (mín. 6 caracteres)"
               required
               minLength={6}
@@ -114,6 +109,13 @@ const AuthPage = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="bg-transparent w-full text-sm outline-none placeholder:text-muted-foreground"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           <button
@@ -136,6 +138,7 @@ const AuthPage = () => {
             {isLogin ? "Criar conta" : "Entrar"}
           </button>
         </p>
+
       </div>
     </div>
   );

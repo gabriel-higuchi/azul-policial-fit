@@ -62,7 +62,7 @@ const CommunityPage = () => {
     // Se não, o servidor enviará automaticamente ao conectar
     if (socket.connected && cachedRanking.length === 0) {
       // Busca ranking via REST como fallback garantido
-      fetch(`http://${window.location.hostname}:3001/api/ranking`)
+      fetch("/api/ranking")
         .then((r) => r.json())
         .then((data) => {
           cachedRanking = data;

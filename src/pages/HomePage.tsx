@@ -74,8 +74,10 @@ const HomePage = () => {
       const recente = data.slice(0, 5).map((r) => {
         const date     = new Date(r.created_at);
         const now      = new Date();
-        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias`;
+        const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const nowOnly  = new Date(now.getFullYear(),  now.getMonth(),  now.getDate());
+        const diffDays = Math.round((nowOnly.getTime() - dateOnly.getTime()) / (1000 * 60 * 60 * 24));
+        const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias atrós`;
 
         if (r.type === "quiz") {
           return { title: `Quiz — ${r.categoria || "Geral"}`, score: `${r.score}/${r.total}`, time };
