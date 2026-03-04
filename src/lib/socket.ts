@@ -32,24 +32,16 @@ export type TafRankingEntry = {
    SOCKET
 ====================================================== */
 
-export const socket: Socket = SERVER_URL
-  ? io(SERVER_URL, {
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
-    })
-  : io({
-      path: "/socket.io",
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
-    });
+export const socket: Socket = io("https://azul-policial-fit-production.up.railway.app", {
+  path: "/socket.io",
+  transports: ["websocket", "polling"],
+  autoConnect: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 10000,
+});
 
 /* ======================================================
    USER HELPERS

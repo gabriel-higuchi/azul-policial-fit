@@ -266,6 +266,7 @@ io.on("connection", (socket) => {
    START
 ====================================================== */
 
-server.listen(3001, "0.0.0.0", () =>
-  console.log("✅ Backend rodando em http://0.0.0.0:3001")
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () =>
+  console.log(`✅ Backend rodando na porta ${PORT}`)
 );
