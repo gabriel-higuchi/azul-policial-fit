@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { socket } from "@/lib/socket";
 
+
 interface Question {
   id: string;
   question: string;
@@ -42,7 +43,7 @@ const QuizPage = () => {
     setLoading(true);
     setArea(selectedArea);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("questions")
       .select("*")
       .eq("area", selectedArea)
@@ -95,7 +96,7 @@ const QuizPage = () => {
 
     const name =
       session.user.user_metadata?.display_name ||
-      session.user.email ||
+      session.user.email?.split("@")[0] ||
       "Anônimo";
 
     socket.emit("submitScore", {

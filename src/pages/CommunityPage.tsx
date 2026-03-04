@@ -1,14 +1,9 @@
 import { Trophy, MessageCircle, Send, Crown, Medal, Award, Wifi, WifiOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { socket } from "@/lib/socket";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { socket, globalCache } from "@/lib/socket";
+import type { Message, RankingUser } from "@/lib/socket";
 import { useAuth } from "@/contexts/AuthContext";
-
-type Message     = { user: string; msg: string; time: string };
-type RankingUser = { name: string; score: number; avatar: string; attempts?: number };
-
-// Cache fora do componente — sobrevive à troca de página
-let cachedMessages: Message[]    = [];
-let cachedRanking:  RankingUser[] = [];
+import { setChatUsername } from "@/lib/socket";
 
 const CommunityPage = () => {
   const { session } = useAuth();
@@ -17,78 +12,69 @@ const CommunityPage = () => {
     session?.user?.email ||
     "Anônimo";
 
-  const [tab, setTab]                     = useState<"ranking" | "chat">("ranking");
-  const [rankingData, setRankingData]     = useState<RankingUser[]>(cachedRanking);
-  const [chatMessages, setChatMessages]   = useState<Message[]>(cachedMessages);
-  const [message, setMessage]             = useState("");
-  const [connected, setConnected]         = useState(socket.connected);
-  const [loadingRanking, setLoadingRanking] = useState(cachedRanking.length === 0);
+  const [tab, setTab]           = useState<"ranking" | "chat">("ranking");
+  const [messages, setMessages] = useState<Message[]>(globalCache.messages);
+  const [ranking, setRanking]   = useState<RankingUser[]>(globalCache.ranking);
+  const [message, setMessage]   = useState("");
+  const [connected, setConnected] = useState(socket.connected);
+  const [loadingRanking, setLoadingRanking] = useState(globalCache.ranking.length === 0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Sincroniza com o globalCache quando o componente está montado ──────────
+  const syncFromCache = useCallback(() => {
+    setMessages([...globalCache.messages]);
+    setRanking([...globalCache.ranking]);
+    if (globalCache.ranking.length > 0) setLoadingRanking(false);
+  }, []);
+
   useEffect(() => {
-    // ── Status de conexão ──────────────────────────────────────────────────
-    const onConnect = () => {
-      setConnected(true);
-    };
+    // Registra como listener — será chamado sempre que globalCache mudar
+    globalCache.listeners.add(syncFromCache);
 
-    const onDisconnect = () => {
-      setConnected(false);
-    };
+    // Zera contador de não lidas ao entrar na aba do chat
+    globalCache.unreadCount = 0;
 
-    // ── Dados ──────────────────────────────────────────────────────────────
-    const onHistory = (msgs: Message[]) => {
-      cachedMessages = msgs;
-      setChatMessages([...msgs]);
-    };
-
-    const onMessage = (msg: Message) => {
-      cachedMessages = [...cachedMessages, msg];
-      setChatMessages([...cachedMessages]);
-    };
-
-    const onRanking = (updated: RankingUser[]) => {
-      cachedRanking = updated;
-      setRankingData([...updated]);
-      setLoadingRanking(false);
-    };
-
+    // Status de conexão
+    const onConnect    = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
     socket.on("connect",    onConnect);
     socket.on("disconnect", onDisconnect);
-    socket.on("history",    onHistory);
-    socket.on("message",    onMessage);
-    socket.on("ranking",    onRanking);
 
-    // Se já conectado, pede dados imediatamente
-    // Se não, o servidor enviará automaticamente ao conectar
-    if (socket.connected && cachedRanking.length === 0) {
-      // Busca ranking via REST como fallback garantido
+    // Fallback REST se ranking ainda vazio
+    if (socket.connected && globalCache.ranking.length === 0) {
       fetch("/api/ranking")
         .then((r) => r.json())
         .then((data) => {
-          cachedRanking = data;
-          setRankingData([...data]);
+          globalCache.ranking = data;
+          setRanking([...data]);
           setLoadingRanking(false);
         })
         .catch(() => setLoadingRanking(false));
-    } else if (cachedRanking.length > 0) {
+    } else if (globalCache.ranking.length > 0) {
       setLoadingRanking(false);
     }
 
+    // Sincroniza imediatamente ao montar
+    syncFromCache();
+
     return () => {
+      globalCache.listeners.delete(syncFromCache);
       socket.off("connect",    onConnect);
       socket.off("disconnect", onDisconnect);
-      socket.off("history",    onHistory);
-      socket.off("message",    onMessage);
-      socket.off("ranking",    onRanking);
     };
-  }, []);
+  }, [syncFromCache]);
+
+  // Zera não lidas ao trocar para aba do chat
+  useEffect(() => {
+    if (tab === "chat") globalCache.unreadCount = 0;
+  }, [tab]);
 
   // Scroll automático no chat
   useEffect(() => {
     if (tab === "chat") {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
     }
-  }, [chatMessages, tab]);
+  }, [messages, tab]);
 
   const sendMessage = () => {
     if (!message.trim() || !connected) return;
@@ -110,76 +96,56 @@ const CommunityPage = () => {
   return (
     <div className="animate-slide-up space-y-5 pt-2">
 
-      {/* Header com status de conexão */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Comunidade</h1>
         <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
-          connected
-            ? "bg-green-500/15 text-green-400"
-            : "bg-red-500/15 text-red-400"
+          connected ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
         }`}>
-          {connected
-            ? <><Wifi size={12} /> Online</>
-            : <><WifiOff size={12} /> Reconectando...</>
-          }
+          {connected ? <><Wifi size={12} /> Online</> : <><WifiOff size={12} /> Reconectando...</>}
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2">
-        <button
-          onClick={() => setTab("ranking")}
+        <button onClick={() => setTab("ranking")}
           className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-            tab === "ranking"
-              ? "gradient-primary text-primary-foreground glow-primary"
-              : "glass-card text-muted-foreground"
-          }`}
-        >
+            tab === "ranking" ? "gradient-primary text-primary-foreground glow-primary" : "glass-card text-muted-foreground"
+          }`}>
           <Trophy size={16} /> Ranking
         </button>
-        <button
-          onClick={() => setTab("chat")}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-            tab === "chat"
-              ? "gradient-primary text-primary-foreground glow-primary"
-              : "glass-card text-muted-foreground"
-          }`}
-        >
+        <button onClick={() => setTab("chat")}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all relative ${
+            tab === "chat" ? "gradient-primary text-primary-foreground glow-primary" : "glass-card text-muted-foreground"
+          }`}>
           <MessageCircle size={16} /> Chat
+          {/* Badge de mensagens não lidas */}
+          {tab !== "chat" && globalCache.unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+              {globalCache.unreadCount > 9 ? "9+" : globalCache.unreadCount}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* ── Ranking ── */}
+      {/* Ranking */}
       {tab === "ranking" && (
         <div className="space-y-3">
           {loadingRanking ? (
-            <div className="glass-card p-8 text-center text-muted-foreground text-sm">
-              Carregando ranking...
-            </div>
-          ) : rankingData.length === 0 ? (
+            <div className="glass-card p-8 text-center text-muted-foreground text-sm">Carregando ranking...</div>
+          ) : ranking.length === 0 ? (
             <div className="glass-card p-8 text-center text-muted-foreground text-sm">
               Nenhum resultado ainda. Seja o primeiro a completar o quiz! 🏆
             </div>
           ) : (
-            rankingData.map((user, i) => (
-              <div
-                key={user.name + i}
-                className={`glass-card p-4 flex items-center gap-3 ${
-                  i === 0 ? "border border-yellow-400/30" : ""
-                }`}
-              >
-                <div className="w-6 flex items-center justify-center shrink-0">
-                  {getRankIcon(i)}
-                </div>
-
+            ranking.map((user, i) => (
+              <div key={user.name + i} className={`glass-card p-4 flex items-center gap-3 ${i === 0 ? "border border-yellow-400/30" : ""}`}>
+                <div className="w-6 flex items-center justify-center shrink-0">{getRankIcon(i)}</div>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                  i === 0
-                    ? "gradient-primary text-primary-foreground glow-primary"
-                    : "bg-secondary text-foreground"
+                  i === 0 ? "gradient-primary text-primary-foreground glow-primary" : "bg-secondary text-foreground"
                 }`}>
                   {user.avatar}
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{user.name}</p>
                   {user.attempts != null && (
@@ -188,7 +154,6 @@ const CommunityPage = () => {
                     </p>
                   )}
                 </div>
-
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold text-primary">{user.score} pts</p>
                   {i < 3 && <span className="text-xs text-muted-foreground">Top {i + 1}</span>}
@@ -199,16 +164,16 @@ const CommunityPage = () => {
         </div>
       )}
 
-      {/* ── Chat ── */}
+      {/* Chat */}
       {tab === "chat" && (
         <div className="flex flex-col gap-3">
           <div className="glass-card p-4 space-y-3 max-h-[55vh] overflow-y-auto">
-            {chatMessages.length === 0 ? (
+            {messages.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-4">
                 Nenhuma mensagem ainda. Seja o primeiro! 💬
               </p>
             ) : (
-              chatMessages.map((msg, i) => (
+              messages.map((msg, i) => (
                 <div key={i} className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-primary">{msg.user}</span>
@@ -230,11 +195,8 @@ const CommunityPage = () => {
               disabled={!connected}
               className="flex-1 bg-secondary rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
-            <button
-              onClick={sendMessage}
-              disabled={!connected || !message.trim()}
-              className="gradient-primary text-primary-foreground p-3 rounded-xl glow-primary active:scale-95 transition-transform disabled:opacity-50"
-            >
+            <button onClick={sendMessage} disabled={!connected || !message.trim()}
+              className="gradient-primary text-primary-foreground p-3 rounded-xl glow-primary active:scale-95 transition-transform disabled:opacity-50">
               <Send size={18} />
             </button>
           </div>

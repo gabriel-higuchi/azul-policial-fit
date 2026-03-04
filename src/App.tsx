@@ -26,19 +26,17 @@ const ProtectedRoutes = () => {
     );
   }
 
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!session) return <Navigate to="/login" replace />;
 
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/quiz" element={<QuizPage />} />
-        <Route path="/taf" element={<TafPage />} />
+        <Route path="/"           element={<HomePage />}    />
+        <Route path="/quiz"       element={<QuizPage />}    />
+        <Route path="/taf"        element={<TafPage />}     />
         <Route path="/comunidade" element={<CommunityPage />} />
-        <Route path="/perfil" element={<ProfilePage />} />
-        <Route path="*" element={<NotFound />} />
+        <Route path="/perfil"     element={<ProfilePage />} />
+        <Route path="*"           element={<NotFound />}    />
       </Routes>
     </AppLayout>
   );
@@ -53,7 +51,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<AuthPage />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
+            <Route path="/*"     element={<ProtectedRoutes />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

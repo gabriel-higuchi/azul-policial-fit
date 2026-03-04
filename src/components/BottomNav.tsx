@@ -2,11 +2,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Home, BookOpen, Timer, Users, User } from "lucide-react";
 
 const tabs = [
-  { path: "/", label: "Início", icon: Home },
-  { path: "/quiz", label: "Quiz", icon: BookOpen },
-  { path: "/taf", label: "TAF", icon: Timer },
-  { path: "/comunidade", label: "Social", icon: Users },
-  { path: "/perfil", label: "Perfil", icon: User },
+  { path: "/",           label: "Início", icon: Home     },
+  { path: "/quiz",       label: "Quiz",   icon: BookOpen },
+  { path: "/taf",        label: "TAF",    icon: Timer    },
+  { path: "/comunidade", label: "Social", icon: Users    },
+  { path: "/perfil",     label: "Perfil", icon: User     },
 ];
 
 const BottomNav = () => {
@@ -24,14 +24,10 @@ const BottomNav = () => {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[56px] ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <div className={`p-1.5 rounded-xl transition-all duration-200 ${
-                isActive ? "gradient-primary glow-primary" : ""
-              }`}>
+              <div className={`p-1.5 rounded-xl transition-all duration-200 ${isActive ? "gradient-primary glow-primary" : ""}`}>
                 <Icon size={20} className={isActive ? "text-primary-foreground" : ""} />
               </div>
               <span className="text-[10px] font-medium">{tab.label}</span>

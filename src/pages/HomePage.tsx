@@ -1,9 +1,10 @@
-import { Shield, BookOpen, Timer, Trophy, Star } from "lucide-react";
+import { Shield, BookOpen, Timer, Trophy, Star, BarChart2, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import StatsPage from "./StatsPage";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-
+import { toast } from "@/hooks/use-toast";
 const quickActions = [
   { icon: BookOpen, label: "Quiz Rápido", desc: "10 questões", path: "/quiz",      gradient: true  },
   { icon: Timer,    label: "Treino TAF",  desc: "Corrida",     path: "/taf",       gradient: false },
@@ -27,6 +28,8 @@ function loadGoals(): Goals {
 }
 
 const HomePage = () => {
+  const [showStats, setShowStats] = useState(false);
+
   const navigate = useNavigate();
   const { session } = useAuth();
 
@@ -34,6 +37,22 @@ const HomePage = () => {
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const goals = loadGoals();
+  // Adicione essa função dentro do componente HomePage
+  const clearStats = async () => {
+    if (!confirm("Limpar todas as atividades e estatísticas?")) return;
+    if (!session?.user) return;
+
+    await supabase
+      .from("user_stats")
+      .delete()
+      .eq("user_id", session.user.id);
+
+    setStats({ questoes: 0, acertos: 0, streak: 0 });
+    setAtividades([]);
+    setTotalPoints(0);
+
+    toast({ title: "Estatísticas limpas! 🗑️" });
+  };
 
   useEffect(() => {
     if (!session?.user) return;
@@ -79,10 +98,12 @@ const HomePage = () => {
         const diffDays = Math.round((nowOnly.getTime() - dateOnly.getTime()) / (1000 * 60 * 60 * 24));
         const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias atrós`;
 
+        
+
         if (r.type === "quiz") {
           return { title: `Quiz — ${r.categoria || "Geral"}`, score: `${r.score}/${r.total}`, time };
         }
-        return { title: `Corrida ${r.duracao || "?"} min`, score: `${(r.score / 1000).toFixed(2)} km`, time };
+        return { title: `Corrida ${r.duracao > 0 ? r.duracao : Math.max(1, Math.round((r.score / 3.33) / 60))} min`, score: `${(r.score / 1000).toFixed(2)} km`, time };
       });
 
       setAtividades(recente);
@@ -97,6 +118,13 @@ const HomePage = () => {
   return (
     <div className="animate-slide-up space-y-6">
       {/* Header */}
+       {/* Remover botão de limpeza*/}
+      <button
+        onClick={clearStats}
+        className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform"
+      >
+        🗑️ Limpar dados
+      </button>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-muted-foreground text-sm">Bem-vindo de volta</p>
@@ -189,6 +217,21 @@ const HomePage = () => {
         </div>
       </div>
 
+      {/* Botão de Estatísticas */}
+      <button
+        onClick={() => setShowStats(true)}
+        className="w-full glass-card p-4 flex items-center gap-3 hover:border-primary/20 transition-all active:scale-[0.98]"
+      >
+        <div className="w-10 h-10 rounded-xl gradient-primary glow-primary flex items-center justify-center shrink-0">
+          <BarChart2 size={20} className="text-primary-foreground" />
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-semibold">Minhas Estatísticas</p>
+          <p className="text-xs text-muted-foreground">Evolução, acertos por matéria e mais</p>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground" />
+      </button>
+
       {/* Recent Activity */}
       <div className="space-y-3">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
@@ -212,6 +255,24 @@ const HomePage = () => {
           )}
         </div>
       </div>
+
+      {/* Stats overlay */}
+      {showStats && (
+        <div className="fixed inset-0 bg-background z-40 overflow-y-auto">
+          <div className="px-4 pt-4 pb-24">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => setShowStats(false)}
+                className="p-2 glass-card rounded-xl"
+              >
+                <ChevronRight size={18} className="rotate-180" />
+              </button>
+              <h1 className="text-lg font-bold">Estatísticas</h1>
+            </div>
+            <StatsPage />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
