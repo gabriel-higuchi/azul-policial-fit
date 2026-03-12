@@ -10,12 +10,12 @@ const genAI    = new GoogleGenerativeAI(GEMINI_API_KEY);
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const AREAS = {
-  PRF: { label: "Polícia Rodoviária Federal", materias: ["Legislação de Trânsito (CTB)", "Direito Constitucional", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Penal", "Direitos Humanos"] },
-  PF:  { label: "Polícia Federal",            materias: ["Direito Constitucional", "Direito Administrativo", "Direito Penal", "Direito Processual Penal", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Legislação Especial (Lei de Drogas, Lei de Lavagem)"] },
-  PC:  { label: "Polícia Civil",              materias: ["Direito Constitucional", "Direito Penal", "Direito Processual Penal", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Legislação Estadual"] },
-  PM:  { label: "Polícia Militar",            materias: ["Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Constitucional", "Direito Administrativo", "Estatuto da Corporação", "Geografia e História do Brasil", "Atualidades"] },
-  PL:  { label: "Polícia Legislativa",        materias: ["Direito Constitucional", "Regimento Interno da Câmara/Senado", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Penal", "Direito Processual Penal"] },
-  PP:  { label: "Polícia Penal",              materias: ["Lei de Execução Penal (LEP)", "Direito Constitucional", "Direito Penal", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direitos Humanos e Ética"] },
+  PRF: { label: "Polícia Rodoviária Federal", materias: ["Legislação de Trânsito (CTB)", "Direito Constitucional", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Penal", "Direitos Humanos, Informática"] },
+  PF:  { label: "Polícia Federal",            materias: ["Direito Constitucional", "Direito Administrativo", "Direito Penal", "Direito Processual Penal", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Legislação Especial (Lei de Drogas, Lei de Lavagem), Informática"] },
+  PC:  { label: "Polícia Civil",              materias: ["Direito Constitucional", "Direito Penal", "Direito Processual Penal", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Legislação Estadual, Informática"] },
+  PM:  { label: "Polícia Militar",            materias: ["Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Constitucional", "Direito Administrativo", "Estatuto da Corporação", "Geografia e História do Brasil", "Atualidades, Informática"] },
+  PL:  { label: "Polícia Legislativa",        materias: ["Direito Constitucional", "Regimento Interno da Câmara/Senado", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direito Penal", "Direito Processual Penal, Informática"] },
+  PP:  { label: "Polícia Penal",              materias: ["Lei de Execução Penal (LEP)", "Direito Constitucional", "Direito Penal", "Direito Administrativo", "Língua Portuguesa", "Raciocínio Lógico e Matemática", "Direitos Humanos e Ética, Informática"] },
 };
 
 async function generateQuestions(areaId) {
