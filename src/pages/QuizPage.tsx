@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { CheckCircle, XCircle, ArrowRight, RotateCcw, Shield } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, RotateCcw, Shield, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { socket } from "@/lib/socket";
-
 
 interface Question {
   id: string;
@@ -12,6 +11,7 @@ interface Question {
   correct: number;
   category: string;
   area: string;
+  explanation?: string;
 }
 
 const AREAS = [
@@ -26,19 +26,19 @@ const AREAS = [
 const QuizPage = () => {
   const { session } = useAuth();
 
-  const [area, setArea]         = useState<string | null>(null);
+  const [area, setArea]           = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [currentQ, setCurrentQ] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [score, setScore]       = useState(0);
-  const [answered, setAnswered] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [saving, setSaving]     = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [currentQ, setCurrentQ]   = useState(0);
+  const [selected, setSelected]   = useState<number | null>(null);
+  const [score, setScore]         = useState(0);
+  const [answered, setAnswered]   = useState(false);
+  const [finished, setFinished]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [showExplanation, setShowExplanation] = useState(false);
 
   const q = questions[currentQ];
 
-  // ── Carrega 10 perguntas da área escolhida ──────────────────────────────────
   const startQuiz = async (selectedArea: string) => {
     setLoading(true);
     setArea(selectedArea);
@@ -55,22 +55,21 @@ const QuizPage = () => {
       return;
     }
 
-    // Embaralha para não vir sempre na mesma ordem
     const shuffled = [...(data || [])].sort(() => Math.random() - 0.5);
     setQuestions(shuffled);
     setLoading(false);
   };
 
-  // ── Responde uma questão ────────────────────────────────────────────────────
   const handleSelect = (index: number) => {
     if (answered) return;
     setSelected(index);
     setAnswered(true);
+    setShowExplanation(false);
     if (index === q.correct) setScore((s) => s + 1);
   };
 
-  // ── Avança ou finaliza ──────────────────────────────────────────────────────
   const handleNext = async () => {
+    setShowExplanation(false);
     if (currentQ < questions.length - 1) {
       setCurrentQ((c) => c + 1);
       setSelected(null);
@@ -81,16 +80,15 @@ const QuizPage = () => {
     }
   };
 
-  // ── Salva resultado ─────────────────────────────────────────────────────────
   const saveStats = async () => {
     if (!session?.user) return;
     setSaving(true);
 
     await supabase.from("user_stats").insert({
-      user_id:  session.user.id,
-      type:     "quiz",
-      score:    score,
-      total:    questions.length,
+      user_id:   session.user.id,
+      type:      "quiz",
+      score:     score,
+      total:     questions.length,
       categoria: area,
     });
 
@@ -109,7 +107,6 @@ const QuizPage = () => {
     setSaving(false);
   };
 
-  // ── Reinicia tudo ───────────────────────────────────────────────────────────
   const handleRestart = () => {
     setArea(null);
     setQuestions([]);
@@ -118,6 +115,7 @@ const QuizPage = () => {
     setScore(0);
     setAnswered(false);
     setFinished(false);
+    setShowExplanation(false);
   };
 
   // ── Tela: seleção de área ───────────────────────────────────────────────────
@@ -158,8 +156,8 @@ const QuizPage = () => {
 
   // ── Tela: resultado ─────────────────────────────────────────────────────────
   if (finished) {
-    const pct    = Math.round((score / questions.length) * 100);
-    const points = Math.round((score / questions.length) * 1000);
+    const pct      = Math.round((score / questions.length) * 100);
+    const points   = Math.round((score / questions.length) * 1000);
     const areaInfo = AREAS.find((a) => a.id === area);
 
     return (
@@ -196,7 +194,7 @@ const QuizPage = () => {
   }
 
   // ── Tela: questão ───────────────────────────────────────────────────────────
-  const areaInfo = AREAS.find((a) => a.id === area);
+  const isWrong = answered && selected !== null && selected !== q.correct;
 
   return (
     <div className="animate-slide-up space-y-5 pt-2">
@@ -229,9 +227,9 @@ const QuizPage = () => {
         {q.options.map((opt, i) => {
           let style = "glass-card";
           if (answered) {
-            if (i === q.correct)                  style = "border-green-500 bg-green-500/10 border";
-            else if (i === selected)              style = "border-destructive bg-destructive/10 border";
-            else                                  style = "glass-card opacity-50";
+            if (i === q.correct)                style = "border-green-500 bg-green-500/10 border";
+            else if (i === selected)            style = "border-destructive bg-destructive/10 border";
+            else                                style = "glass-card opacity-50";
           }
           return (
             <button
@@ -253,6 +251,28 @@ const QuizPage = () => {
           );
         })}
       </div>
+
+      {/* Botão ver explicação — só aparece quando erra e tem explanation */}
+      {isWrong && q.explanation && !showExplanation && (
+        <button
+          onClick={() => setShowExplanation(true)}
+          className="w-full glass-card border border-amber-500/30 py-3 rounded-xl text-sm font-semibold text-amber-400 flex items-center justify-center gap-2 active:scale-95 transition-transform"
+        >
+          <BookOpen size={16} />
+          Ver explicação
+        </button>
+      )}
+
+      {/* Explicação */}
+      {showExplanation && q.explanation && (
+        <div className="glass-card border border-amber-500/30 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-amber-400">
+            <BookOpen size={16} />
+            <span className="text-sm font-semibold">Gabarito comentado</span>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">{q.explanation}</p>
+        </div>
+      )}
 
       {/* Next */}
       {answered && (

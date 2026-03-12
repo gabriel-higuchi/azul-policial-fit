@@ -41,12 +41,14 @@ Responda APENAS com um JSON válido, sem texto adicional, sem markdown, sem come
       "question": "Texto da questão aqui?",
       "options": ["Alternativa A", "Alternativa B", "Alternativa C", "Alternativa D"],
       "correct": 0,
-      "category": "Nome da matéria"
+      "category": "Nome da matéria",
+      "explanation": "Explicação detalhada de por que a alternativa correta está certa e por que as demais estão erradas. Cite artigos de lei ou fundamentos quando relevante."
     }
   ]
 }
 
 O campo "correct" deve ser o índice (0-3) da alternativa correta.
+O campo "explanation" deve ter no mínimo 2 frases explicando o gabarito com embasamento legal ou conceitual.
 Gere exatamente 10 questões.`;
 
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -63,37 +65,45 @@ Gere exatamente 10 questões.`;
 
 async function replaceQuestions(areaId, questions) {
   const { error: deleteError } = await supabase.from("questions").delete().eq("area", areaId);
-  if (deleteError) { console.error(`❌ Erro ao deletar questões de ${areaId}:`, deleteError.message); return false; }
+  if (deleteError) { console.error(`Erro ao deletar questoes de ${areaId}:`, deleteError.message); return false; }
 
-  const records = questions.map((q) => ({ area: areaId, question: q.question, options: q.options, correct: q.correct, category: q.category }));
+  const records = questions.map((q) => ({
+    area: areaId,
+    question: q.question,
+    options: q.options,
+    correct: q.correct,
+    category: q.category,
+    explanation: q.explanation || null,
+  }));
+
   const { error: insertError } = await supabase.from("questions").insert(records);
-  if (insertError) { console.error(`❌ Erro ao inserir questões de ${areaId}:`, insertError.message); return false; }
+  if (insertError) { console.error(`Erro ao inserir questoes de ${areaId}:`, insertError.message); return false; }
 
-  console.log(`✅ ${areaId}: 10 questões inseridas com sucesso`);
+  console.log(`${areaId}: 10 questoes inseridas com sucesso`);
   return true;
 }
 
 async function generateDailyQuestions() {
-  console.log("🤖 Iniciando geração diária de questões —", new Date().toLocaleString("pt-BR"));
+  console.log("Iniciando geracao diaria de questoes —", new Date().toLocaleString("pt-BR"));
   const areas = Object.keys(AREAS);
   let success = 0, failed = 0;
 
   for (const areaId of areas) {
     try {
-      console.log(`📝 Gerando questões para ${areaId}...`);
+      console.log(`Gerando questoes para ${areaId}...`);
       const questions = await generateQuestions(areaId);
-      if (!questions || questions.length === 0) { console.error(`❌ ${areaId}: nenhuma questão gerada`); failed++; continue; }
+      if (!questions || questions.length === 0) { console.error(`${areaId}: nenhuma questao gerada`); failed++; continue; }
       const ok = await replaceQuestions(areaId, questions);
       if (ok) success++; else failed++;
       await new Promise((r) => setTimeout(r, 1000));
     } catch (err) {
-      console.error(`❌ Erro ao processar ${areaId}:`, err.message);
+      console.error(`Erro ao processar ${areaId}:`, err.message);
       failed++;
     }
   }
 
-  console.log(`\n📊 Resultado: ${success} áreas com sucesso, ${failed} com erro`);
-  console.log("✅ Geração concluída —", new Date().toLocaleString("pt-BR"));
+  console.log(`Resultado: ${success} areas com sucesso, ${failed} com erro`);
+  console.log("Geracao concluida —", new Date().toLocaleString("pt-BR"));
 }
 
 module.exports = { generateDailyQuestions };
