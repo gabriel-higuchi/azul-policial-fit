@@ -27,6 +27,8 @@ function loadGoals(): Goals {
   return { targetScore: 5000, focusArea: "PRF", studyDays: [1, 2, 3, 4, 5] };
 }
 
+const ADMIN_EMAIL = "gabriel2309bvp@gmail.com";
+
 const HomePage = () => {
   const [showStats, setShowStats] = useState(false);
 
@@ -37,7 +39,8 @@ const HomePage = () => {
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const goals = loadGoals();
-  // Adicione essa função dentro do componente HomePage
+  const isAdmin = session?.user?.email === ADMIN_EMAIL;
+
   const clearStats = async () => {
     if (!confirm("Limpar todas as atividades e estatísticas?")) return;
     if (!session?.user) return;
@@ -72,14 +75,12 @@ const HomePage = () => {
       const acertos  = quizData.reduce((acc, r) => acc + (r.score || 0), 0);
       const pct      = questoes > 0 ? Math.round((acertos / questoes) * 100) : 0;
 
-      // Pontos totais acumulados (mesma fórmula do servidor: score/total * 1000 por quiz)
       const pts = quizData.reduce(
         (acc, r) => acc + Math.round(((r.score || 0) / (r.total || 1)) * 1000),
         0
       );
       setTotalPoints(pts);
 
-      // Streak
       const dias = new Set(quizData.map((r) => new Date(r.created_at).toDateString()));
       let streak = 0;
       const hoje = new Date();
@@ -89,16 +90,13 @@ const HomePage = () => {
 
       setStats({ questoes, acertos: pct, streak });
 
-      // Atividade recente
       const recente = data.slice(0, 5).map((r) => {
         const date     = new Date(r.created_at);
         const now      = new Date();
         const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const nowOnly  = new Date(now.getFullYear(),  now.getMonth(),  now.getDate());
         const diffDays = Math.round((nowOnly.getTime() - dateOnly.getTime()) / (1000 * 60 * 60 * 24));
-        const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias atrós`;
-
-        
+        const time     = diffDays === 0 ? "Hoje" : diffDays === 1 ? "Ontem" : `${diffDays} dias atrás`;
 
         if (r.type === "quiz") {
           return { title: `Quiz — ${r.categoria || "Geral"}`, score: `${r.score}/${r.total}`, time };
@@ -112,19 +110,21 @@ const HomePage = () => {
     fetchStats();
   }, [session]);
 
-  // Progresso em relação à meta (0–100%)
   const progressPct = Math.min(Math.round((totalPoints / goals.targetScore) * 100), 100);
 
   return (
     <div className="animate-slide-up space-y-6">
+      {/* Botão admin — visível apenas para gabrielyudi.leite@gmail.com */}
+      {isAdmin && (
+        <button
+          onClick={clearStats}
+          className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform"
+        >
+          🗑️ Limpar dados
+        </button>
+      )}
+
       {/* Header */}
-       {/* Remover botão de limpeza*/}
-      <button
-        onClick={clearStats}
-        className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform"
-      >
-        🗑️ Limpar dados
-      </button>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-muted-foreground text-sm">Bem-vindo de volta</p>
@@ -149,7 +149,6 @@ const HomePage = () => {
           </span>
         </div>
 
-        {/* Barra de progresso */}
         <div className="h-3 bg-secondary rounded-full overflow-hidden">
           <div
             className="h-full gradient-primary rounded-full transition-all duration-700"

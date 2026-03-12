@@ -914,7 +914,9 @@ const TafPage = () => {
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Ranking semanal — reseta toda segunda-feira.</p>
             <div className="flex items-center gap-2">
-              <button onClick={() => { if (confirm("Resetar ranking e chat agora?")) socket.emit("force_reset"); }} className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform">🔄 Resetar</button>
+              {session?.user?.email === "gabriel2309bvp@gmail.com" && (
+                <button onClick={() => { if (confirm("Resetar ranking e chat agora?")) socket.emit("force_reset"); }} className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform">🔄 Resetar</button>
+              )}
               <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${connected ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
                 {connected ? <><Wifi size={12} /> Online</> : <><WifiOff size={12} /> Reconectando...</>}
               </div>
