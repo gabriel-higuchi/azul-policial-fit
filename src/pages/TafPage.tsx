@@ -195,7 +195,18 @@ const TafPage = () => {
 
   useEffect(() => {
     globalCache.listeners.add(syncFromCache);
-    const onConnect = () => { setConnected(true); socket.emit("get_taf_ranking"); };
+    const onConnect = () => {
+      setConnected(true);
+      socket.emit("get_taf_ranking");
+      // Reenvia resultado pendente ao reconectar
+      const pending = localStorage.getItem("pending_taf_result");
+      if (pending) {
+        try {
+          socket.emit("taf_result", JSON.parse(pending));
+          localStorage.removeItem("pending_taf_result");
+        } catch (_) {}
+      }
+    };
     const onDisconnect = () => setConnected(false);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -511,8 +522,15 @@ const TafPage = () => {
 
   const emitTafRanking = (entry: TafRankingEntry) => {
     if (socket.connected) {
-      console.log("📤 Enviando TAF ranking:", entry);
       socket.emit("taf_result", entry);
+      // Reenvia resultado pendente se existir
+      const pending = localStorage.getItem("pending_taf_result");
+      if (pending) {
+        try {
+          socket.emit("taf_result", JSON.parse(pending));
+        } catch (_) {}
+        localStorage.removeItem("pending_taf_result");
+      }
     } else {
       localStorage.setItem("pending_taf_result", JSON.stringify(entry));
     }
@@ -914,7 +932,7 @@ const TafPage = () => {
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Ranking semanal — reseta toda segunda-feira.</p>
             <div className="flex items-center gap-2">
-              {session?.user?.email === "gabriel2309bvp@gmail.com" && (
+              {session?.user?.email === "gabrielyudi.leite@gmail.com" && (
                 <button onClick={() => { if (confirm("Resetar ranking e chat agora?")) socket.emit("force_reset"); }} className="text-xs text-destructive px-2 py-1 glass-card rounded-lg active:scale-95 transition-transform">🔄 Resetar</button>
               )}
               <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${connected ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
